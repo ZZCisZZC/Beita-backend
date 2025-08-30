@@ -3,6 +3,7 @@ package com.example.demo.service;
 import java.util.List;
 
 import com.example.demo.model.GroupBuy;
+import com.example.demo.model.GroupBuyRecord;
 import com.example.demo.model.Meetup;
 
 public interface XiaoyuanService {
@@ -39,5 +40,6 @@ public interface XiaoyuanService {
 	List<GroupBuy> getGroupBuyByIdXiaoyuan(String id);
 	int deleteGroupBuyById(int id);
 	int addGroupBuy(GroupBuy groupbuy);
+	int addGroupBuyRecord(GroupBuyRecord groupbuyRecord);
 	
 }

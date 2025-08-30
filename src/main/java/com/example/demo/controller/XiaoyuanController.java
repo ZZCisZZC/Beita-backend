@@ -37,7 +37,11 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.ResourceUtils;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -57,8 +61,8 @@ import com.example.demo.model.CommentIdentity;
 import com.example.demo.model.CommentLevel;
 import com.example.demo.model.CommentLevelIdentity;
 import com.example.demo.model.GroupBuy;
+import com.example.demo.model.GroupBuyRecord;
 import com.example.demo.model.Like;
-import com.example.demo.model.common.AddtaskXiaoyuanDTO;
 import com.example.demo.model.Meetup;
 import com.example.demo.model.Member;
 import com.example.demo.model.RadioGroupCategory;
@@ -70,6 +74,7 @@ import com.example.demo.model.TaskIdentity;
 import com.example.demo.model.Test;
 import com.example.demo.model.VerifyUser;
 import com.example.demo.model.VerifyUserIdentity;
+import com.example.demo.model.common.AddtaskXiaoyuanDTO;
 import com.example.demo.service.BeitaService;
 import com.example.demo.service.CaicaiService;
 import com.example.demo.service.EmailService;
@@ -84,13 +89,13 @@ import com.qiniu.storage.model.DefaultPutRet;
 import com.qiniu.util.Auth;
 
 import utils.AesUtil;
+import utils.AuthUtil;
 import utils.IpUtil;
 import utils.Result;
 import utils.ResultGenerator;
 import utils.UUIDGenerator;
 import utils.BlacklistWord;
 import utils.HttpRequest;
-import utils.AuthUtil;
 
 @RestController
 public class XiaoyuanController {
@@ -153,7 +158,23 @@ public class XiaoyuanController {
 	
 	
 	@RequestMapping(value="/addtaskXiaoyuan",method = {RequestMethod.POST})
-    public Object addTask(HttpServletRequest request, AddtaskXiaoyuanDTO taskDto) throws UnsupportedEncodingException{
+    public  Object addTask(
+    						HttpServletRequest request,
+                           @RequestParam (value = "c_time",required = false)String c_time,
+                           @RequestParam (value = "price",required = false)String price,
+                           @RequestParam (value = "wechat",required = false)String wechat,
+                           @RequestParam (value = "openid",required = false)String openid,
+                           @RequestParam (value = "avatar",required = false)String avatar,
+                           @RequestParam (value = "campusGroup",required = false)String campusGroup,
+                           @RequestParam (value = "commentNum",required = false)int commentNum,
+                           @RequestParam (value = "watchNum",required = false)int watchNum,
+                           @RequestParam (value = "likeNum",required = false)int likeNum,
+                           @RequestParam (value = "radioGroup",required = false)String radioGroup,
+                           @RequestParam (value = "img",required = false)String img,
+                           @RequestParam (value = "region",required = false)String region,
+                           @RequestParam (value = "userName",required = false)String userName,
+                           @RequestParam (value = "cover",required = false)String cover,
+                           @RequestParam (value = "encrypted",required = false)String encrypted) throws UnsupportedEncodingException{ 
 //		System.out.println("addtask");
         Map<String,Object>map=new HashMap<>();
         String ip = IpUtil.getIpAddr(request);
@@ -165,38 +186,23 @@ public class XiaoyuanController {
 		int content_flag = 0;
 		int title_flag = 0;
 		long time_diff_en = 0;
-
-        // 登录态校验：仅允许 status = 1 的用户发帖
-        if (!AuthUtil.isUserVerified(taskDto.getOpenid(), quanziService)) {
-            map.put("code", 403);
-            map.put("msg", "未认证用户，无法发帖");
-            return map;
-        }
-
+		
 		// test 时间戳转换
 		Date date_ori = null;
-		if (taskDto.getC_time() != null) {
-			try {
-				SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
-				date_ori = sdf.parse(taskDto.getC_time());
-			} catch (ParseException e1) {
-				// TODO Auto-generated catch block
-				e1.printStackTrace();
-			} //将字符串改为date的格式
-		} else {
-			date_ori = new Date();
-		}
+		try {
+			SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
+			date_ori = sdf.parse(c_time);
+		} catch (ParseException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		} //将字符串改为date的格式
 		
-        try {
-            String password = "[PASSWORD]";
-            // encrypted 空值兜底处理
-            if (taskDto.getEncrypted() == null || taskDto.getEncrypted().isEmpty()) {
-                taskDto.setEncrypted("");
-            }
-            byte[] decryptFrom = AesUtil.parseHexStr2Byte(taskDto.getEncrypted());
-            byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
-            String result = new String(resultByte,"UTF-8");
-			//System.out.println(result);
+		try {
+			String password = "[PASSWORD]";
+			byte[] decryptFrom = AesUtil.parseHexStr2Byte(encrypted);
+			byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
+			String result = new String(resultByte,"UTF-8");
+//        System.out.println(result);
 			JSONObject obj = JSON.parseObject(result);
 			content = obj.getString("content");
 			title = obj.getString("title");
@@ -209,12 +215,17 @@ public class XiaoyuanController {
 				SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
 				Date date_en = sdf.parse(c_time_en);
 				time_diff_en = date_ori.getTime()-date_en.getTime();
-				System.out.println("addtask_encrypt_timestamp_diff:"+(date_ori.getTime()-date_en.getTime()));
-			} catch (ParseException e1) {
+			} catch (Exception e1) {
+//				System.out.println("TIME FORMAT WONG");
 				// TODO Auto-generated catch block
-				e1.printStackTrace();
+				try {
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-mm-dd'T'HH:HH:SS.sssZ", Locale.ENGLISH);
+					Date date_en = sdf.parse(c_time_en);
+					time_diff_en = date_ori.getTime()-date_en.getTime();
+				} catch (Exception e2) {
+					System.out.println("TIME FORMAT WONG");
+				}
 			} //将字符串改为date的格式
-			
 			
 			// check blacklist - blacklist
 			content_flag =  BlacklistWord.check_blacklist(content);
@@ -227,6 +238,7 @@ public class XiaoyuanController {
             map.put("msg","成功");
             return map;
 		}
+//        if (!verify.equals("[VERIFY]") || !c_time_en.equals(c_time)) {
 		if (!verify.equals("[VERIFY]")) {
         	map.put("code",200);
             map.put("msg","成功");
@@ -236,17 +248,24 @@ public class XiaoyuanController {
         Date date = new Date(); 
 //        System.out.println("当前日期字符串：" + format.format(date) + "。");
         String c_time_new = format.format(date);
-
-        Task task = new Task();
-        org.springframework.beans.BeanUtils.copyProperties(taskDto, task);
+        Task task=new Task();
         task.setContent(content);
+        task.setPrice(price);
         task.setTitle(title);
+        task.setWechat(wechat);
+        task.setOpenid(openid);
+        task.setAvatar(avatar);
+        task.setCampusGroup(campusGroup);
+        task.setCommentNum(commentNum);
+        task.setLikeNum(likeNum);
+        task.setWatchNum(watchNum);
+        task.setRadioGroup(radioGroup);
+        task.setImg(img.replace("[","").replace("]","").replace("\"",""));
+        task.setRegion(region);
+        task.setUserName(userName);
         task.setC_time(c_time_new);
+        task.setCover(cover.replace("[","").replace("]","").replace("\"",""));
         task.setIp(ip);
-        
-        // 特殊处理的字段
-        task.setImg(taskDto.getImg() == null ? "" : taskDto.getImg().replace("[","").replace("]","").replace("\"",""));
-        task.setCover(taskDto.getCover() == null ? "" : taskDto.getCover().replace("[","").replace("]","").replace("\"",""));
         
         // set blacklist
         if (content_flag==1 || title_flag == 1) {
@@ -256,8 +275,8 @@ public class XiaoyuanController {
         }
         
         // if-else on region
-        if ("sg".equals(taskDto.getRegion())) {
-            List<BlackList> checkCode =caicaiService.checkBlackList(taskDto.getOpenid());
+        if (region.equals("sg")) {
+            List<BlackList> checkCode =caicaiService.checkBlackList(openid);
             if(checkCode.size()>0){
             	String period = checkCode.get(0).getPeriod();
             	if (period.equals("1天")) {
@@ -274,10 +293,10 @@ public class XiaoyuanController {
                     map.put("msg","成功");
             	} 
             }else {
-                int addcode = caicaiService.addTask(task);
+            	int addcode=caicaiService.addTask(task);
             }
-        } else if ("beita".equals(taskDto.getRegion())) {
-            List<BlackList> checkCode =beitaService.checkBlackList(taskDto.getOpenid());
+        } else if (region.equals("beita")) {
+            List<BlackList> checkCode =beitaService.checkBlackList(openid);
             if(checkCode.size()>0){
             	String period = checkCode.get(0).getPeriod();
             	int id = checkCode.get(0).getId();
@@ -300,10 +319,10 @@ public class XiaoyuanController {
             	} 
             }else {
             	task.setRegion("0");
-            	int addcode = beitaService.addTask(task);
+            	int addcode=beitaService.addTask(task);
             }
         } else {
-            List<BlackList> checkCode =quanziService.checkBlackList(taskDto.getOpenid());
+            List<BlackList> checkCode =quanziService.checkBlackList(openid);
             if(checkCode.size()>0){
             	String period = checkCode.get(0).getPeriod();
             	if (period.equals("1天")) {
@@ -321,7 +340,216 @@ public class XiaoyuanController {
             	} 
             }else {
             	List<Switch> switchList = new ArrayList<Switch>();
-            	switchList = quanziService.getSwitchStatus(taskDto.getCampusGroup());
+            	switchList = quanziService.getSwitchStatus(campusGroup);
+        		if (switchList.size() <= 0) {
+        			int addcode=quanziService.addTask(task,"false");
+            	} else {
+            		String status=switchList.get(0).getVerify();
+            		int addcode=quanziService.addTask(task,status);
+            	}
+            	
+            }
+        }
+        return map;
+    }
+	
+	@RequestMapping(value="/addtaskVerify",method = {RequestMethod.POST})
+    public  Object addtaskVerify(
+    						HttpServletRequest request, 
+    						@RequestParam (value = "c_time",required = false)String c_time,
+                            @RequestParam (value = "price",required = false)String price,
+                            @RequestParam (value = "wechat",required = false)String wechat,
+                            @RequestParam (value = "openid",required = false)String openid,
+                            @RequestParam (value = "avatar",required = false)String avatar,
+                            @RequestParam (value = "campusGroup",required = false)String campusGroup,
+                            @RequestParam (value = "commentNum",required = false)int commentNum,
+                            @RequestParam (value = "watchNum",required = false)int watchNum,
+                            @RequestParam (value = "likeNum",required = false)int likeNum,
+                            @RequestParam (value = "radioGroup",required = false)String radioGroup,
+                            @RequestParam (value = "img",required = false)String img,
+                            @RequestParam (value = "region",required = false)String region,
+                            @RequestParam (value = "userName",required = false)String userName,
+                            @RequestParam (value = "cover",required = false)String cover,
+                            @RequestParam (value = "encrypted",required = false)String encrypted) throws UnsupportedEncodingException{ 
+//		System.out.println("addtask");
+        Map<String,Object>map=new HashMap<>();
+        String ip = IpUtil.getIpAddr(request);
+//        System.out.println(region);
+        String content = "";
+		String title = "";
+		String verify = "";
+		String c_time_en = "";
+		int content_flag = 0;
+		int title_flag = 0;
+		long time_diff_en = 0;
+		
+		// 登录态校验：仅允许 status = 1 的用户发帖
+        if (!AuthUtil.isUserVerified(openid, quanziService)) {
+            map.put("code", 403);
+            map.put("msg", "未认证用户，无法发帖");
+            return map;
+        }
+		
+		// test 时间戳转换
+		Date date_ori = null;
+		if (c_time != null) {
+			try {
+				SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
+				date_ori = sdf.parse(c_time);
+			} catch (ParseException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			} //将字符串改为date的格式
+		} else {
+			date_ori = new Date();
+		}
+		
+		try {
+			String password = "[PASSWORD]";
+			// encrypted 空值兜底处理
+            if (encrypted == null || encrypted.isEmpty()) {
+            	encrypted = "";
+            }
+            byte[] decryptFrom = AesUtil.parseHexStr2Byte(encrypted);
+            byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
+            String result = new String(resultByte,"UTF-8");
+			JSONObject obj = JSON.parseObject(result);
+			content = obj.getString("content");
+			title = obj.getString("title");
+			verify = obj.getString("verify");
+			c_time_en = obj.getString("c_time");
+			
+			
+			// test 时间戳转换
+			try {
+				SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
+				Date date_en = sdf.parse(c_time_en);
+				time_diff_en = date_ori.getTime()-date_en.getTime();
+			} catch (Exception e1) {
+				// TODO Auto-generated catch block
+				try {
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-mm-dd'T'HH:HH:SS.sssZ", Locale.ENGLISH);
+					Date date_en = sdf.parse(c_time_en);
+					time_diff_en = date_ori.getTime()-date_en.getTime();
+				} catch (Exception e2) {
+					System.out.println("TIME FORMAT WONG");
+				}
+			} //将字符串改为date的格式
+			
+			// check blacklist - blacklist
+			content_flag =  BlacklistWord.check_blacklist(content);
+			title_flag =  BlacklistWord.check_blacklist(title);
+			
+		} catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			map.put("code",200);
+            map.put("msg","成功");
+            return map;
+		}
+//        if (!verify.equals("[VERIFY]") || !c_time_en.equals(c_time)) {
+		if (!verify.equals("[VERIFY]")) {
+        	map.put("code",200);
+            map.put("msg","成功");
+            return map;
+        }
+        SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
+        Date date = new Date(); 
+//        System.out.println("当前日期字符串：" + format.format(date) + "。");
+        String c_time_new = format.format(date);
+        Task task=new Task();
+        task.setContent(content);
+        task.setPrice(price);
+        task.setTitle(title);
+        task.setWechat(wechat);
+        task.setOpenid(openid);
+        task.setAvatar(avatar);
+        task.setCampusGroup(campusGroup);
+        task.setCommentNum(commentNum);
+        task.setLikeNum(likeNum);
+        task.setWatchNum(watchNum);
+        task.setRadioGroup(radioGroup);
+        task.setImg(img.replace("[","").replace("]","").replace("\"",""));
+        task.setRegion(region);
+        task.setUserName(userName);
+        task.setC_time(c_time_new);
+        task.setCover(cover.replace("[","").replace("]","").replace("\"",""));
+        task.setIp(ip);
+        
+        // set blacklist
+        if (content_flag==1 || title_flag == 1) {
+        	task.setIs_delete(1);
+        } else {
+        	task.setIs_delete(0);
+        }
+        
+        // if-else on region
+        if (region.equals("sg")) {
+            List<BlackList> checkCode =caicaiService.checkBlackList(openid);
+            if(checkCode.size()>0){
+            	String period = checkCode.get(0).getPeriod();
+            	if (period.equals("1天")) {
+            		map.put("code",1);
+                    map.put("msg","成功");
+            	} else if (period.equals("3天")) {
+            		map.put("code",3);
+                    map.put("msg","成功");
+            	} else if (period.equals("7天")) {
+            		map.put("code",7);
+                    map.put("msg","成功");
+            	} else {
+            		map.put("code",200);
+                    map.put("msg","成功");
+            	} 
+            }else {
+            	int addcode=caicaiService.addTask(task);
+            }
+        } else if (region.equals("beita")) {
+            List<BlackList> checkCode =beitaService.checkBlackList(openid);
+            if(checkCode.size()>0){
+            	String period = checkCode.get(0).getPeriod();
+            	int id = checkCode.get(0).getId();
+            	if (period.equals("1天")) {
+            		map.put("code",1);
+            		map.put("id",id);
+                    map.put("msg","成功");
+            	} else if (period.equals("3天")) {
+            		map.put("code",3);
+            		map.put("id",id);
+                    map.put("msg","成功");
+            	} else if (period.equals("7天")) {
+            		map.put("code",7);
+            		map.put("id",id);
+                    map.put("msg","成功");
+            	} else {
+            		map.put("code",200);
+            		map.put("id",id);
+                    map.put("msg","成功");
+            	} 
+            }else {
+            	task.setRegion("0");
+            	int addcode=beitaService.addTask(task);
+            }
+        } else {
+            List<BlackList> checkCode =quanziService.checkBlackList(openid);
+            if(checkCode.size()>0){
+            	String period = checkCode.get(0).getPeriod();
+            	if (period.equals("1天")) {
+            		map.put("code",1);
+                    map.put("msg","成功");
+            	} else if (period.equals("3天")) {
+            		map.put("code",3);
+                    map.put("msg","成功");
+            	} else if (period.equals("7天")) {
+            		map.put("code",7);
+                    map.put("msg","成功");
+            	} else {
+            		map.put("code",200);
+                    map.put("msg","成功");
+            	} 
+            }else {
+            	List<Switch> switchList = new ArrayList<Switch>();
+            	switchList = quanziService.getSwitchStatus(campusGroup);
         		if (switchList.size() <= 0) {
         			int addcode=quanziService.addTask(task,"false");
             	} else {
@@ -390,30 +618,34 @@ public class XiaoyuanController {
 		return taskIdentityList;
 	}
 	
-	@RequestMapping(value="/getallTaskXiaoyuan")
-    public  Object getallTaskXiaoyuan(
-                           @RequestParam (value = "length")int length,
-                           @RequestParam (value = "region",required = false)String region,
-                           @RequestParam (value = "campus",required = false)String campus){ 
-        Map<String,Object>map=new HashMap<>();
-        List<Task> taskList = null;
-        if (region.equals("sg")) {
-        	taskList = caicaiService.getallTask(length);
-        } else if (region.equals("beita")) {
-        	taskList = beitaService.getallTask(length);
-        } else {
-        	taskList =quanziService.getallTask(length);
-        }
-//        map.put("taskList",taskList);  
-        map.put("taskList", convertTaskToTaskIdentity(taskList));
-        return map;
-    }
+//	@RequestMapping(value="/getallTaskXiaoyuan")
+//    public  Object getallTaskXiaoyuan(
+//                           @RequestParam (value = "length")int length,
+//                           @RequestParam (value = "region",required = false)String region,
+//                           @RequestParam (value = "campus",required = false)String campus){ 
+//        Map<String,Object>map=new HashMap<>();
+//        List<Task> taskList = null;
+//        if (region.equals("sg")) {
+//        	taskList = caicaiService.getallTask(length);
+//        } else if (region.equals("beita")) {
+//        	taskList = beitaService.getallTask(length);
+//        } else {
+//        	taskList =quanziService.getallTask(length);
+//        }
+////        map.put("taskList",taskList);  
+//        map.put("taskList", convertTaskToTaskIdentity(taskList));
+//        return map;
+//    }
 	
+	// in use
 	@RequestMapping(value="/gettaskbyIdXiaoyuan")
     public  Object gettaskbyId(
+    						HttpServletRequest request,
     					   @RequestParam (value = "pk")int Id,
     					   @RequestParam (value = "region",required = false)String region,
                            @RequestParam (value = "campus",required = false)String campus){ 
+		String ip = IpUtil.getIpAddr(request);
+		System.out.println("gettaskbyIdXiaoyuan,ip:"+ip);
         Map<String,Object>map=new HashMap<>();
         List<Task> taskList = null;
         if (region.equals("sg")) {
@@ -432,13 +664,15 @@ public class XiaoyuanController {
     }
 	
 
-	
+	// in use
 	@RequestMapping(value="/gettaskbyOpenIdXiaoyuan")
-    public  Object gettaskbyOpenId(
+    public  Object gettaskbyOpenId(HttpServletRequest request,
     					   @RequestParam (value = "openid")String openid,
     					   @RequestParam (value = "length")int length,
     					   @RequestParam (value = "region",required = false)String region,
                            @RequestParam (value = "campus",required = false)String campus){ 
+		String ip = IpUtil.getIpAddr(request);
+		System.out.println("gettaskbyOpenIdXiaoyuan,ip:"+ip);
         Map<String,Object>map=new HashMap<>();
         List<Task> taskList = null; 
         if (region.equals("sg")) {
@@ -453,12 +687,16 @@ public class XiaoyuanController {
         return map;
     }
 	
+	// in use
 	@RequestMapping(value="/gettaskbySearchXiaoyuan")
     public  Object gettaskbySearch(
+    		HttpServletRequest request,
     					   @RequestParam (value = "search")String search,
     					   @RequestParam (value = "length")int length,
     					   @RequestParam (value = "region",required = false)String region,
                            @RequestParam (value = "campus",required = false)String campus){
+		String ip = IpUtil.getIpAddr(request);
+		System.out.println("gettaskbySearchXiaoyuan,ip:"+ip);
 		Map<String,Object>map=new HashMap<>();
 		List<Task> taskList = null;
 		
@@ -480,13 +718,16 @@ public class XiaoyuanController {
     }
 	
 	
+	// in use
 	@RequestMapping(value="/gettaskbyTypeXiaoyuan")
-    public  Object gettaskbyType(
+    public  Object gettaskbyType(HttpServletRequest request,
     					   @RequestParam (value = "radioGroup")String radioGroup,
     					   @RequestParam (value = "type")String type,
     					   @RequestParam (value = "length")int length,
     					   @RequestParam (value = "region",required = false)String region,
     					   @RequestParam (value = "campus",required = false)String campus){ 
+		String ip = IpUtil.getIpAddr(request);
+		System.out.println("gettaskbyTypeXiaoyuan,ip:"+ip);
         Map<String,Object>map=new HashMap<>();
         List<String> radioGroupL = Arrays.asList(radioGroup.replace("\"","").replace("[","").replace("]","").split(","));
         List<Task> taskList = new ArrayList<Task>();
@@ -777,6 +1018,13 @@ public class XiaoyuanController {
             	updateCode =quanziService.incComment(pk);
             }
         }
+//        if(addcode==1){
+//            map.put("code",200);
+//            map.put("msg","添加数据成功");
+//        }else {
+//            map.put("code",100);
+//            map.put("msg","添加数据失败");
+//        }
         return map;
     }
 	
@@ -1352,7 +1600,41 @@ public class XiaoyuanController {
         return map;
     }
 	
-
+//	@RequestMapping(value="/getQRListXiaoyuan")
+//	public Object getQRListXiaoyuan(
+//			@RequestParam (value = "campus")String campus,
+//			@RequestParam (value = "region",required = false)String region
+//			) {
+//		Map<String,Object>map=new HashMap<>();
+//		List<QR> qrList = quanziService.getQRList(region, campus);
+//		map.put("res",qrList);       
+////		if (region.equals("sg")) {
+////			qrList =quanziService.getQRList();
+////		} else if (region.equals("beita")) {
+////			qrList =quanziService.getQRList();
+////		} else {
+////			qrList =quanziService.getQRList(region, campus);
+////		}
+//		return map;
+//	}
+	
+//	@RequestMapping(value="/getQRList")
+//    public  Object getQRList(
+//    						@RequestParam (value = "campus")String campus,
+//                            @RequestParam (value = "region",required = false)String region){ 
+//        Map<String,Object>map=new HashMap<>();
+//        List<QR> qrList = new ArrayList<QR>();
+//    	qrList =quanziService.getQR(campus);
+//        if (region.equals("sg")) {
+//        	qrList =caicaiService.getQR();
+//        	rankList =caicaiService.getRankList(length);
+//    	} else if (region.equals("beita")) {
+//    		rankList =beitaService.getRankList(length);
+//        }
+//        map.put("qrList",qrList);       
+//        return map;
+//    }
+	
 	@RequestMapping(value="/udpateUserInfoXiaoyuan")
 	public Object addUserInfoXiaoyuan(
 			@RequestParam (value = "openid")String openid,
@@ -1360,8 +1642,8 @@ public class XiaoyuanController {
 			@RequestParam (value = "nickname")String nickname
 			) {
 		Map<String,Object>map=new HashMap<>();
-        // check existence
-        List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
+		// check existence
+		List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
 		if (existence.size()>0) {
 			int updateCode = quanziService.udpateUserInfoByOpenid(openid,nickname,avatar);
 			map.put("code", updateCode);
@@ -1376,11 +1658,11 @@ public class XiaoyuanController {
 	@RequestMapping(value="/getVerifyUserByOpenidXiaoyuan")
 	public Object getVerifyUserByOpenidXiaoyuan(
 		@RequestParam (value = "openid")String openid) {
-     Map<String,Object>map=new HashMap<>();
-     List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
-    if ((existence.size()>0)) {
-        map.put("code", "200");
-        map.put("msg", existence.get(0).getStatus());
+		 Map<String,Object>map=new HashMap<>();
+		 List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
+		 if ((existence.size()>0) && (existence.get(0).getStatus()!=-1)) {
+			 map.put("code", "200");
+			 map.put("msg", existence.get(0).getStatus());
 		 } else {
 			 map.put("code", "-1");
 			 map.put("msg", "未提交认证信息");
@@ -1398,34 +1680,10 @@ public class XiaoyuanController {
             @RequestParam (value = "region",required = false)String region) {
         Map<String,Object>map=new HashMap<>();
         
-        List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
-        if (existence.size()>0) {
-            // 已存在：若为软删除/未注册态（status==-1）允许更新，否则视为已认证
-            if (existence.get(0).getStatus()==-1) {
-                int res = -1;
-                VerifyUser verify_user = new VerifyUser();
-                verify_user.setOpenid(openid);
-                verify_user.setPic(pic);
-                if (email.equals("") || email.equals(null)) {
-                    verify_user.setStatus(0);
-                } else {
-                    verify_user.setStatus(1);
-                }
-                verify_user.setRegion(region);
-                verify_user.setCampus(campus);
-                verify_user.setEmail(email);
-                res = quanziService.updateVerifyUserVerifyInfo(verify_user);
-                if (res>0) {
-                    map.put("code",200);
-                    map.put("msg","更新成功！");
-                } else {
-                    map.put("code",-1);
-                    map.put("msg","更新失败，请重试");
-                }
-            } else {
-            	map.put("code",-1);
-                map.put("msg","该微信号已认证");
-            }
+        List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
+        if ((existence.size()>0)&&(existence.get(0).getStatus()!=-1)) {
+        	map.put("code",-1);
+            map.put("msg","该微信号已认证");
         } else {
         	int res = -1;
         	VerifyUser verify_user = new VerifyUser();
@@ -1439,9 +1697,11 @@ public class XiaoyuanController {
         	verify_user.setRegion(region);
         	verify_user.setCampus(campus);
         	verify_user.setEmail(email);
-            if (existence.size()==0) {
-                res = quanziService.addVerifyUser(verify_user);
-            }
+        	if (existence.size()==0) {
+            	res = quanziService.addVerifyUser(verify_user);
+        	} else if (existence.get(0).getStatus()==-1) {
+        		res = quanziService.updateVerifyUserVerifyInfo(verify_user);
+        	}
         	
         	if (res>0) {
         		map.put("code",200);
@@ -1459,10 +1719,10 @@ public class XiaoyuanController {
 	public Object checkVerifyUserQuanzi(
 			@RequestParam (value = "openid")String openid) {
 		Map<String,Object>map=new HashMap<>();
-        List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
-        if (existence.size()>0) {
-            VerifyUserIdentity user = existence.get(0);
-            if (user.getStatus()==1) {
+		List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
+		if (existence.size()>0 && existence.get(0).getStatus()!=-1) {
+			VerifyUser user = existence.get(0);
+			if (user.getStatus()==1) {
 				map.put("code",200);
 	            map.put("msg","该微信号已认证");
 			} else {
@@ -1517,8 +1777,8 @@ public class XiaoyuanController {
 	public Object setIdentityXiaoyuan(
 			@RequestParam (value = "openid")String openid,
 			@RequestParam (value = "identity")String identity) {
-        Map<String,Object>map=new HashMap<>();
-        List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
+		Map<String,Object>map=new HashMap<>();
+		List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
 		if (existence.size()>0) {
         	int updateCode = quanziService.updateUserIdentityByOpenid(openid,identity);
         	map.put("code", 200);
@@ -1628,7 +1888,7 @@ public class XiaoyuanController {
 		return map;
 	}
 	
-    private String getAccessToken(String region, String name){
+    private String getAccessToken(String region, String campus,String name){
     	Map<String, String> res = new HashMap<>();
     	List<AccessCode> accessCode = new ArrayList<>();
     	if (region.equals("beita")) {
@@ -1637,9 +1897,14 @@ public class XiaoyuanController {
     		accessCode = caicaiService.getCodeCtime(System.currentTimeMillis()-5400*1000);
     	} else if (region.equals("9")) {
     		accessCode = quanziService.getCodeCtime(System.currentTimeMillis()-5400*1000, "9");
+    	} else if (region.equals("14")) {
+    		accessCode = quanziService.getCodeCtime(System.currentTimeMillis()-5400*1000, "30");
+    	} else if ((region.equals("0"))&(campus!=null)&(campus.equals("30"))) {
+    		accessCode = quanziService.getCodeCtime(System.currentTimeMillis()-5400*1000, "30");
     	} else {
-    		accessCode = quanziService.getCodeCtime(System.currentTimeMillis()-5400*1000, "4");
+    		accessCode = quanziService.getCodeCtime(System.currentTimeMillis()-5400*1000, region);
     	}
+    	// campus: beita:beita, sg:sg, xiaobuxiaoyuan:>=13, aomen:9, zhuke: 0,30
     	
     	String accessToken= "";
  		if (accessCode.size() > 0) {
@@ -1650,14 +1915,17 @@ public class XiaoyuanController {
  	        String url = "https://api.weixin.qq.com/cgi-bin/token";
  	        String pa = ""; 
  	        if (region.equals("beita")) {
- 	        	pa = "grant_type=client_credential&appid=[APPID]&secret=[SECRET]";
+ 	        	pa = "grant_type=client_credential&appid=wxc0d677e74a6493df&secret=ecbb7f12b1e433becc9c0406c0f2040e";
         	} else if (region.equals("sg")) {
-        		pa = "grant_type=client_credential&appid=[APPID]&secret=[SECRET]";
+        		pa = "grant_type=client_credential&appid=wxb8ff860117148f2a&secret=5d2bcdfb1216eb6daf489be204436904";
         	} else if (region.equals("9")) {
         		Secret secretList = quanziService.getSecretByCampus("9").get(0);
         		pa = "grant_type=client_credential&appid="+secretList.getAppid()+"&secret="+secretList.getSecret();
+        	} else if (region.equals("0")&campus.equals("30")) {
+        		Secret secretList = quanziService.getSecretByCampus("14").get(0);
+        		pa = "grant_type=client_credential&appid="+secretList.getAppid()+"&secret="+secretList.getSecret();
         	} else {
-        		Secret secretList = quanziService.getSecretByCampus("4").get(0);
+        		Secret secretList = quanziService.getSecretByCampus(region).get(0);
         		pa = "grant_type=client_credential&appid="+secretList.getAppid()+"&secret="+secretList.getSecret();
         	}
  	        String json = HttpRequest.sendGet(url, pa);
@@ -1670,8 +1938,10 @@ public class XiaoyuanController {
  	        		caicaiService.saveCode(accessToken,System.currentTimeMillis());
  	        	} else if (region.equals("9")){
  	        		quanziService.saveCode(accessToken,System.currentTimeMillis(),"9");
+ 	        	} else if (region.equals("0")&campus.equals("30")) {
+ 	        		quanziService.saveCode(accessToken,System.currentTimeMillis(), campus);
  	        	} else {
- 	        		quanziService.saveCode(accessToken,System.currentTimeMillis(),"4");
+ 	        		quanziService.saveCode(accessToken,System.currentTimeMillis(),region);
  	        	}
  	 			
  	 		}	
@@ -1682,20 +1952,22 @@ public class XiaoyuanController {
 	@RequestMapping(value="/generateSelectedXiaoyuan")
 	public  Object generateSelectedXiaoyuan(
 			@RequestParam (value = "taskid")String taskid,
-			@RequestParam (value = "region")String region) {
+			@RequestParam (value = "region")String region,
+			@RequestParam (value = "campus",required = false)String campus) {
+		System.out.println("region:"+region+",campus:"+campus);
 		Map<String,Object>map=new HashMap<>();
 		List<AccessCode> accessCode = new ArrayList<>();
 		List<Test> selectList = new ArrayList<>();
 		try {
-			String accessToken = getAccessToken(region, "getSelected");
+			String accessToken = getAccessToken(region, campus, "getSelected");
 			List<Task> taskList = new ArrayList<>();
     		if (region.equals("beita")) {
     			taskList =beitaService.gettaskbyId(Integer.parseInt(taskid));
-	        	} else if (region.equals("sg")) {
-	        		taskList =caicaiService.gettaskbyId(Integer.parseInt(taskid));
-	        	} else {
-	        		taskList =quanziService.gettaskbyId(Integer.parseInt(taskid));
-	        	}
+        	} else if (region.equals("sg")) {
+        		taskList =caicaiService.gettaskbyId(Integer.parseInt(taskid));
+        	} else {
+        		taskList =quanziService.gettaskbyId(Integer.parseInt(taskid));
+        	}
             Map<String,Object> paramMap = new HashMap<>();
             paramMap.put("page","pages/detail/detail");
             paramMap.put("scene",String.valueOf("id="+taskid));
@@ -1727,13 +1999,13 @@ public class XiaoyuanController {
                     output.write(buffer, 0, n);
                 }
                 String newFileName = imgName.toString();
-                String ACCESS_KEY = "[ACCESS_KEY]";
-                String SECRET_KEY = "[SECRET_KEY]";
-                String BUCKET = "[BUCKET]";
+                String ACCESS_KEY = "wnkRCtmFWg7DZhCLjT72UOAT9WCdaI-TkPi8ncHr";
+                String SECRET_KEY = "_8ZESS4_ZA0fqCMekohRgyVbWT01C7qi12Xj2OM7";
+                String BUCKET = "gzj";
                 Date date=new Date();//此时date为当前的时间
                 System.out.println(date);
                 SimpleDateFormat dateFormat=new SimpleDateFormat("YYYYMMdd");
-                String PIC_URL = "[PIC_URL]/qr/"+dateFormat.format(date)+"/"+region+"/";
+                String PIC_URL = "http://yqtech.ltd/quanzi/qr/"+dateFormat.format(date)+"/"+region+"/";
                 Auth auth = Auth.create(ACCESS_KEY, SECRET_KEY);
                 String upToken = auth.uploadToken(BUCKET);
                 Configuration cfg = new Configuration(Region.huanan());
@@ -1780,6 +2052,8 @@ public class XiaoyuanController {
 	}
 	
 	
+
+	
 	private static String doPostJson(String url, String json) {
         // 创建Httpclient对象
         CloseableHttpClient httpClient = HttpClients.createDefault();
@@ -1815,6 +2089,7 @@ public class XiaoyuanController {
 			@RequestParam (value = "openid")String openid,
 			@RequestParam (value = "region")String region,
 			@RequestParam (value = "campus", required=false)String campus) {
+		System.out.println("region:"+region+",campus:"+campus);
 		Map<String,Object> map = new HashMap<>();
 		
 		if (openid.equals("undefined") || openid.equals("") || openid.length()<20) {
@@ -1822,7 +2097,7 @@ public class XiaoyuanController {
 			map.put("res", -1);
 		} else {
 			
-			String accessToken = getAccessToken(region, "getPhoneXiaoyuan");
+			String accessToken = getAccessToken(region, campus, "getPhoneXiaoyuan");
 			String url2 = "https://api.weixin.qq.com/wxa/business/getuserphonenumber?access_token="+accessToken;
 	        
 	        JSONObject obj = new JSONObject();
@@ -1833,14 +2108,14 @@ public class XiaoyuanController {
 	        if (testJ.getString("errcode").equals("0") || testJ.getInteger("errcode")==0) {
 	            String phone = testJ.getJSONObject("phone_info").getString("phoneNumber");
 	            // insert into db
-	            List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
+	            List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
 	            if (existence.size()>0) {
 	            	int updateCode = quanziService.udpateUserPhoneByOpenid(openid,phone);
 	            	map.put("code", updateCode);
 	    			map.put("res", phone);
 	            } else {
 	            	int status = -1;
-	            	int addCode = quanziService.addUserPhoneByOpenid(openid,phone, status);
+	            	int addCode = quanziService.addUserPhoneByOpenid(openid,phone, status, region, campus);
 	            	map.put("code", addCode);
 	            	map.put("res", phone);
 	            }
@@ -1861,10 +2136,10 @@ public class XiaoyuanController {
 			) {
 		Map<String,Object>map=new HashMap<>();
 		// check existence
-        List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
+		List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
 		if (existence.size()>0) {
-            if (existence.get(0).getPhone()!=null) {
-                String phone = existence.get(0).getPhone();
+			if (existence.get(0).getPhone()!=null) {
+				String phone = existence.get(0).getPhone();
 				if (phone.length()>0) {
 					map.put("res", phone);
 				} else {
@@ -1887,7 +2162,11 @@ public class XiaoyuanController {
 			) {
 		Map<String,Object>map=new HashMap<>();
 		// check existence
-        List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
+		List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
+//		System.out.println("openid:"+openid);
+//		System.out.println("campus:"+campus);
+//		System.out.println("region:"+region);
+//		System.out.println(existence.size());
 		int res = -1;
 		if (existence.size()>0) {
 			// 用户存在时更新
@@ -1905,7 +2184,7 @@ public class XiaoyuanController {
 		@RequestParam (value = "openid")String openid) {
 		System.out.println("openid for getuserinfo:"+openid);
 		 Map<String,Object>map=new HashMap<>();
-     List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
+		 List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
 		
 		 if (existence.size()>0) {
 			 map.put("res", existence.get(0));
@@ -1914,6 +2193,9 @@ public class XiaoyuanController {
 		 }
 		 return map;
 	}
+	
+	// setCampusRegion, input: openid, campus, region, output-> 1/0
+	// getUserInfo, input: openid, output-> all user info
 	
 	@RequestMapping(value="/getAllMeetupXiaoyuan")
 	public Object getAllMeetupXiaoyuan(
@@ -1973,6 +2255,7 @@ public class XiaoyuanController {
 		Map<String,Object>map=new HashMap<>();
 		List<Meetup> meetups;
 		if (campus.equals("0")) {
+//			meetups = xiaoyuanService.getMeetupByRegionCampusCategoryXiaoyuan(category,length,region, campus);
 			meetups = xiaoyuanService.getMeetupByRegionCategoryXiaoyuan(category,length,region);
 		} else {
 			meetups = xiaoyuanService.getMeetupByRegionCampusAllCategoryXiaoyuan(category,length,region, campus);
@@ -2089,6 +2372,16 @@ public class XiaoyuanController {
 					new_list.remove("");
 					new_list.remove(null);
 					String joiner_string = String.join(",", new_list);
+//					for(int i=0;i<new_list.size();i++){
+//						String j = new_list;
+//			            if (!(j.equals(openid))) {
+//			            	if (i!=new_list.length-1) {
+//			            		joiner_string += j+",";
+//			            	} else {
+//			            		joiner_string += j;
+//			            	}
+//			            }
+//			        }
 					int updateCode = xiaoyuanService.updateMeetupJoiner(group_id, joiner_string);
 					map.put("res", updateCode);
 					map.put("data", "退出成功");
@@ -2135,6 +2428,38 @@ public class XiaoyuanController {
 		Map<String,Object>map=new HashMap<>();
 		List<GroupBuy> groupbuys = xiaoyuanService.getGroupBuyByIdXiaoyuan(id);
 		map.put("res", groupbuys);
+		return map;
+	}
+	
+	@RequestMapping(value="/addGroupBuyRecordXiaoyuan")
+	public Object addGroupBuyRecordXiaoyuan(
+			@RequestParam (value = "groupbuy_id",required = false)Integer groupbuy_id,
+			@RequestParam (value = "openid",required = false)String openid,
+			@RequestParam (value = "name",required = false)String name,
+			@RequestParam (value = "number",required = false)String number,
+			@RequestParam (value = "phone",required = false)String phone,
+			@RequestParam (value = "icnumber",required = false)String icnumber,
+			 @RequestParam (value = "college",required = false)String college,
+            @RequestParam (value = "region",required = false)String region,
+            @RequestParam (value = "campus",required = false)String campus
+			) {
+		Map<String,Object>map=new HashMap<>();
+		GroupBuyRecord rec = new GroupBuyRecord();
+		rec.setGroupbuy_id(groupbuy_id);
+		rec.setOpenid(openid);
+		rec.setName(name);
+		rec.setNumber(number);
+		rec.setRegion(region);
+		rec.setCampus(campus);
+		rec.setPhone(phone);
+		rec.setIcnumber(icnumber);
+		rec.setCollege(college);
+		int addCode = xiaoyuanService.addGroupBuyRecord(rec);
+		if (addCode == 1) {
+			map.put("code", 200);
+		} else {
+			map.put("code", 404);
+		}
 		return map;
 	}
 	

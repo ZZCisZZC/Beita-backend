@@ -645,8 +645,13 @@ public class QuanziImpl implements QuanziService{
 	}
 	
 	@Override
-	public List<VerifyUserIdentity> getVerifyUserByOpenid(String openid){
+	public List<VerifyUser> getVerifyUserByOpenid(String openid){
 		return quanziDao.getVerifyUserByOpenid(openid);
+	}
+	
+	@Override
+	public List<VerifyUserIdentity> getVerifyUserIdentityByOpenid(String openid){
+		return quanziDao.getVerifyUserIdentityByOpenid(openid);
 	}
 	
 	@Override
@@ -680,8 +685,8 @@ public class QuanziImpl implements QuanziService{
 	}
 	
 	@Override
-	public int addUserPhoneByOpenid(String openid, String phone, int status) {
-		return quanziDao.addUserPhoneByOpenid(openid, phone, status);
+	public int addUserPhoneByOpenid(String openid, String phone, int status, String region, String campus) {
+		return quanziDao.addUserPhoneByOpenid(openid, phone, status, region, campus);
 	}
 	
 	@Override
