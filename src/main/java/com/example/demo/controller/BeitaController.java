@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,6 +15,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -39,13 +41,16 @@ import com.example.demo.model.CommentLevel;
 import com.example.demo.model.Like;
 import com.example.demo.model.Member;
 import com.example.demo.model.Suggestion;
+import com.example.demo.model.Switch;
 import com.example.demo.model.Task;
 import com.example.demo.model.Test;
 import com.example.demo.model.VerifyUser;
 import com.example.demo.model.common.AddCommentDTO;
+import com.example.demo.model.common.AddtaskXiaoyuanDTO;
 import com.example.demo.model.common.DeleteTaskDTO;
 import com.example.demo.model.common.DeleteCommentDTO;
 import com.example.demo.service.BeitaService;
+import com.example.demo.service.CaicaiService;
 import com.example.demo.service.EmailService;
 import com.example.demo.service.QuanziService;
 import com.example.demo.service.impl.EmailUtils;
@@ -55,7 +60,6 @@ import utils.IpUtil;
 import utils.BlacklistWord;
 import utils.AuthUtil;
 
-
 @RestController
 public class BeitaController {
 	
@@ -64,9 +68,13 @@ public class BeitaController {
 	
 	@Autowired
 	private EmailService emailService;
-    
-    @Autowired
-    private QuanziService quanziService;
+	
+	@Autowired
+	private QuanziService quanziService;
+	
+	@Autowired
+	private CaicaiService caicaiService;
+	
 	static String charset = "UTF-8";
 
 	
@@ -107,104 +115,41 @@ public class BeitaController {
 		return buffer;
 	}
 	
-	
-	@RequestMapping(value="/addtask")
-    public  Object addTask(
-    						HttpServletRequest request,
-                           @RequestParam (value = "content")String content,
-                           @RequestParam (value = "c_time")String c_time,
-                           @RequestParam (value = "price")String price,
-                           @RequestParam (value = "title")String title,
-                           @RequestParam (value = "wechat")String wechat,
-                           @RequestParam (value = "openid")String openid,
-                           @RequestParam (value = "avatar")String avatar,
-                           @RequestParam (value = "campusGroup")String campusGroup,
-                           @RequestParam (value = "commentNum")int commentNum,
-                           @RequestParam (value = "watchNum")int watchNum,
-                           @RequestParam (value = "likeNum")int likeNum,
-                           @RequestParam (value = "radioGroup")String radioGroup,
-                           @RequestParam (value = "img")String img,
-                           @RequestParam (value = "region")String region,
-                           @RequestParam (value = "userName")String userName,
-                           @RequestParam (value = "cover")String cover){ 
-        Map<String,Object>map=new HashMap<>();
-        int content_flag = 0;
-		int title_flag = 0;
-        String ip = IpUtil.getIpAddr(request);
-//        System.out.println(ip);
-        Task task=new Task();
-        SimpleDateFormat format = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
-        Date date = new Date(); 
-        String c_time_new = format.format(date);
-        task.setContent(content);
-        task.setPrice(price);
-        task.setTitle(title);
-        task.setWechat(wechat);
-        task.setOpenid(openid);
-        task.setAvatar(avatar);
-        task.setCampusGroup(campusGroup);
-        task.setCommentNum(commentNum);
-        task.setLikeNum(likeNum);
-        task.setWatchNum(watchNum);
-        task.setRadioGroup(radioGroup);
-        task.setImg(img.replace("[","").replace("]","").replace("\"",""));
-        task.setRegion(region);
-        task.setUserName(userName);
-        task.setC_time(c_time_new);
-        task.setCover(cover.replace("[","").replace("]","").replace("\"",""));
-        task.setIp(ip);
-        
-     // check blacklist - blacklist
-		content_flag = BlacklistWord.check_blacklist(content);
-		title_flag = BlacklistWord.check_blacklist(title);
-        // set blacklist
-        if (content_flag==1 || title_flag == 1) {
-        	task.setIs_delete(1);
-        } else {
-        	task.setIs_delete(0);
-        }
-        
-        List<BlackList> checkCode =beitaService.checkBlackList(openid);
-        if(checkCode.size()>0){
-        	String period = checkCode.get(0).getPeriod();
-        	int id = checkCode.get(0).getId();
-        	if (period.equals("1天")) {
-        		map.put("code",1);
-        		map.put("id",id);
-                map.put("msg","成功");
-        	} else if (period.equals("3天")) {
-        		map.put("code",3);
-        		map.put("id",id);
-                map.put("msg","成功");
-        	} else if (period.equals("7天")) {
-        		map.put("code",7);
-        		map.put("id",id);
-                map.put("msg","成功");
-        	} else {
-        		map.put("code",200);
-        		map.put("id",id);
-                map.put("msg","成功");
-        	} 
-        }else {
-        	int addcode=beitaService.addTask(task);
-        }
-//        int addcode=beitaService.addTask(task);
-        return map;
-    }
-	
-	@RequestMapping(value="/getallTask")
-    public  Object getallTask(
-                           @RequestParam (value = "length")int length){ 
-        Map<String,Object>map=new HashMap<>();
-        List<Task> taskList =beitaService.getallTask(length);
-        map.put("taskList",taskList);       
-        return map;
-    }
-	
 	@RequestMapping(value="/gettaskbyId")
     public  Object gettaskbyId(
-    					   @RequestParam (value = "pk")int Id){ 
+    						HttpServletRequest request,
+    					   @RequestParam (value = "pk")int Id,
+    					   @RequestParam (value = "c_time",required = false)String c_time,
+    					   @RequestParam (value = "encrypted",required = false)String encrypted){ 
+		String ip = IpUtil.getIpAddr(request);
+		System.out.println("gettaskbyId,ip:"+ip);
         Map<String,Object>map=new HashMap<>();
+        
+        String verify = "";
+		String c_time_en = "";
+		long time_diff_en = 0;
+		
+		try {
+			String password = "[PASSWORD]";
+			byte[] decryptFrom = AesUtil.parseHexStr2Byte(encrypted);
+			byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
+			String result = new String(resultByte,"UTF-8");
+			JSONObject obj = JSON.parseObject(result);
+			verify = obj.getString("verify");
+			c_time_en = obj.getString("c_time");
+			
+		}catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			map.put("taskList",null);
+            return map;
+		}
+		
+		if (!verify.equals("[VERIFY]")) {
+        	map.put("taskList",null);
+            return map;
+        }
+        
         List<Task> taskList =beitaService.gettaskbyId(Id);
         int updateCode =beitaService.incWatch(Id);
         map.put("taskList",taskList);       
@@ -216,8 +161,56 @@ public class BeitaController {
 	@RequestMapping(value="/gettaskbyOpenId")
     public  Object gettaskbyOpenId(
     					   @RequestParam (value = "openid")String openid,
-    					   @RequestParam (value = "length")int length){ 
+    					   @RequestParam (value = "length")int length,
+    					   @RequestParam (value = "c_time",required = false)String c_time,
+    					   @RequestParam (value = "encrypted",required = false)String encrypted){ 
         Map<String,Object>map=new HashMap<>();
+        String verify = "";
+		String c_time_en = "";
+		long time_diff_en = 0;
+		Date date_ori = null;
+		
+		try {
+			String password = "[PASSWORD]";
+			byte[] decryptFrom = AesUtil.parseHexStr2Byte(encrypted);
+			byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
+			String result = new String(resultByte,"UTF-8");
+//        System.out.println(result);
+			JSONObject obj = JSON.parseObject(result);
+			verify = obj.getString("verify");
+			c_time_en = obj.getString("c_time");			
+			
+			// test 时间戳转换
+			try {
+				SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
+				date_ori = sdf.parse(c_time);
+				Date date_en = sdf.parse(c_time_en);
+				time_diff_en = date_ori.getTime()-date_en.getTime();
+			} catch (Exception e1) {
+//							System.out.println("TIME FORMAT WONG");
+				// TODO Auto-generated catch block
+				try {
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ENGLISH);
+					date_ori = sdf.parse(c_time);
+					Date date_en = sdf.parse(c_time_en);
+					time_diff_en = date_ori.getTime()-date_en.getTime();
+				} catch (Exception e2) {
+					System.out.println("TIME FORMAT WONG");
+				}
+			} //将字符串改为date的格式
+			
+		}catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			map.put("taskList",null);
+            return map;
+		}
+		
+		if (!verify.equals("[VERIFY]")) {
+        	map.put("taskList",null);
+            return map;
+        }
+        
         List<Task> taskList =beitaService.gettaskbyOpenId(openid,length);
         map.put("taskList",taskList);       
         return map;
@@ -225,41 +218,130 @@ public class BeitaController {
 	
 	@RequestMapping(value="/gettaskbySearch")
     public  Object gettaskbySearch(
+    						HttpServletRequest request,
     					   @RequestParam (value = "search")String search,
-    					   @RequestParam (value = "length")int length){ 
+    					   @RequestParam (value = "length")int length,
+    					   @RequestParam (value = "c_time",required = false)String c_time,
+    					   @RequestParam (value = "encrypted",required = false)String encrypted){ 
+		String ip = IpUtil.getIpAddr(request);
+		System.out.println("gettaskbySearch,ip:"+ip);
         Map<String,Object>map=new HashMap<>();
+        
+        String verify = "";
+		String c_time_en = "";
+		long time_diff_en = 0;
+		Date date_ori = null;
+		
+		try {
+			String password = "[PASSWORD]";
+			byte[] decryptFrom = AesUtil.parseHexStr2Byte(encrypted);
+			byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
+			String result = new String(resultByte,"UTF-8");
+//        System.out.println(result);
+			JSONObject obj = JSON.parseObject(result);
+			verify = obj.getString("verify");
+			c_time_en = obj.getString("c_time");			
+			
+			// test 时间戳转换
+			try {
+				SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
+				date_ori = sdf.parse(c_time);
+				Date date_en = sdf.parse(c_time_en);
+				time_diff_en = date_ori.getTime()-date_en.getTime();
+				System.out.println("addtask_encrypt_timestamp_diff:"+(date_ori.getTime()-date_en.getTime()));
+			} catch (Exception e1) {
+//							System.out.println("TIME FORMAT WONG");
+				// TODO Auto-generated catch block
+				try {
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ENGLISH);
+					date_ori = sdf.parse(c_time);
+					Date date_en = sdf.parse(c_time_en);
+					time_diff_en = date_ori.getTime()-date_en.getTime();
+					System.out.println("addtask_encrypt_timestamp_diff:"+(date_ori.getTime()-date_en.getTime()));
+				} catch (Exception e2) {
+					System.out.println("TIME FORMAT WONG");
+				}
+			} //将字符串改为date的格式
+			
+		}catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			map.put("taskList",null);
+            return map;
+		}
+		
+		if (!verify.equals("[VERIFY]")) {
+        	map.put("taskList",null);
+            return map;
+        }
+        
         List<Task> taskList =beitaService.gettaskbySearch(search,length);
         map.put("taskList",taskList);       
         return map;
     }
+
 	
-	@RequestMapping(value="/gettaskbyRadio")
-    public  Object gettaskbyRadio(
-    					   @RequestParam (value = "radioGroup")String radioGroup,
-    					   @RequestParam (value = "length")int length){ 
-        Map<String,Object>map=new HashMap<>();
-        List<Task> taskList =beitaService.gettaskbyRadio(radioGroup,length);
-        map.put("taskList",taskList);       
-        return map;
-    }
-	
-	@RequestMapping(value="/gettaskbyRadioSecond")
-    public  Object gettaskbyRadioSecond(
-    					   @RequestParam (value = "radioGroup")String radioGroup,
-    					   @RequestParam (value = "length")int length){ 
-        Map<String,Object>map=new HashMap<>();
-        List<String> radioGroupL = Arrays.asList(radioGroup.replace("\"","").replace("[","").replace("]","").split(","));
-        List<Task> taskList =beitaService.gettaskbyRadioSecond(radioGroupL,length);
-        map.put("taskList",taskList);       
-        return map;
-    }
-	
-	@RequestMapping(value="/gettaskbyType")
-    public  Object gettaskbyType(
+	@RequestMapping(value="/gettaskbyTypeCursor", method = {RequestMethod.POST})
+    public  Object gettaskbyTypeCursor(
+    						HttpServletRequest request,
     					   @RequestParam (value = "radioGroup")String radioGroup,
     					   @RequestParam (value = "type")String type,
-    					   @RequestParam (value = "length")int length){ 
-        Map<String,Object>map=new HashMap<>();
+    					   @RequestParam (value = "length")int length,
+    					   @RequestParam (value = "c_time",required = false)String c_time,
+    					   @RequestParam (value = "encrypted",required = false)String encrypted){
+		Map<String,Object>map=new HashMap<>();
+		
+		String verify = "";
+		String c_time_en = "";
+		long time_diff_en = 0;
+		Date date_ori = null;
+		
+		try {
+			String password = "[PASSWORD]";
+			byte[] decryptFrom = AesUtil.parseHexStr2Byte(encrypted);
+			byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
+			String result = new String(resultByte,"UTF-8");
+//        System.out.println(result);
+			JSONObject obj = JSON.parseObject(result);
+			verify = obj.getString("verify");
+			c_time_en = obj.getString("c_time");			
+			
+			// test 时间戳转换
+			try {
+				SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
+				date_ori = sdf.parse(c_time);
+				Date date_en = sdf.parse(c_time_en);
+				time_diff_en = date_ori.getTime()-date_en.getTime();
+				System.out.println("addtask_encrypt_timestamp_diff:"+(date_ori.getTime()-date_en.getTime()));
+			} catch (Exception e1) {
+//							System.out.println("TIME FORMAT WONG");
+				// TODO Auto-generated catch block
+				try {
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ENGLISH);
+					date_ori = sdf.parse(c_time);
+					Date date_en = sdf.parse(c_time_en);
+					time_diff_en = date_ori.getTime()-date_en.getTime();
+					System.out.println("addtask_encrypt_timestamp_diff:"+(date_ori.getTime()-date_en.getTime()));
+				} catch (Exception e2) {
+					System.out.println("TIME FORMAT WONG");
+				}
+			} //将字符串改为date的格式
+			
+		}catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			map.put("taskList",null);
+            return map;
+		}
+		
+		if (!verify.equals("[VERIFY]")) {
+        	map.put("taskList",null);
+            return map;
+        }
+		
+		String ip = IpUtil.getIpAddr(request);
+		System.out.println("gettaskbyTypeCursor,ip:"+ip);
+        
         List<String> radioGroupL = Arrays.asList(radioGroup.replace("\"","").replace("[","").replace("]","").split(","));
         List<Task> taskList =beitaService.gettaskbyType(radioGroupL,type,length);
         map.put("taskList",taskList);       
@@ -375,26 +457,19 @@ public class BeitaController {
         }     
         return map;
     }
-
 	
 	
-    @RequestMapping(value="/deleteTask", method = {RequestMethod.POST})
-    public Object deleteTask(
+	@RequestMapping(value="/deleteTask", method = {RequestMethod.POST})
+    public  Object deleteTask(
     						HttpServletRequest request,
-                            @RequestBody DeleteTaskDTO deleteTaskDTO){ 
-        Map<String,Object> map = new HashMap<>();
-        // 登录态校验：仅允许 status = 1 的用户删除
-        if (!AuthUtil.isUserVerified(deleteTaskDTO.getOpenid(), quanziService)) {
-            map.put("code", 403);
-            map.put("msg", "未认证用户，无权执行该操作");
-            return map;
-        }
+    						@RequestParam (value = "pk")String Id){ 
+        Map<String,Object>map=new HashMap<>();
         String ip = IpUtil.getIpAddr(request);
         System.out.println(ip);
         int updateCode = 0;
 		try {
 			String password = "[PASSWORD]";
-            byte[] decryptFrom = AesUtil.parseHexStr2Byte(deleteTaskDTO.getPk());
+			byte[] decryptFrom = AesUtil.parseHexStr2Byte(Id);
 			byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
 			String result = new String(resultByte,"UTF-8");
 			JSONObject obj = JSON.parseObject(result);
@@ -414,7 +489,47 @@ public class BeitaController {
         }else {
             map.put("code",100);
             map.put("msg","失败");
+        }     
+        return map;
+    }
+	
+	@RequestMapping(value="/deleteTaskVerify", method = {RequestMethod.POST})
+    public  Object deleteTaskVerify(
+    						HttpServletRequest request,
+    						 @RequestBody DeleteTaskDTO deleteTaskDTO){ 
+        Map<String,Object>map=new HashMap<>();
+        // 登录态校验：仅允许 status = 1 的用户删除
+        if (!AuthUtil.isUserVerified(deleteTaskDTO.getOpenid(), quanziService)) {
+            map.put("code", 403);
+            map.put("msg", "未认证用户，无权执行该操作");
+            return map;
         }
+        String ip = IpUtil.getIpAddr(request);
+        System.out.println(ip);
+        int updateCode = 0;
+		try {
+			String password = "[PASSWORD]";
+			byte[] decryptFrom = AesUtil.parseHexStr2Byte(deleteTaskDTO.getPk());
+			byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
+			String result = new String(resultByte,"UTF-8");
+			JSONObject obj = JSON.parseObject(result);
+			String id = obj.getString("id");
+//        System.out.println(result);
+			updateCode =beitaService.deleteTask(Integer.parseInt(id));
+		} catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			map.put("code",200);
+            map.put("msg","成功");
+            return map;
+		}
+        if(updateCode==1){
+            map.put("code",200);
+            map.put("msg","成功");
+        }else {
+            map.put("code",100);
+            map.put("msg","失败");
+        }     
         return map;
     }
 	
@@ -464,23 +579,76 @@ public class BeitaController {
     }
 	
 	@RequestMapping(value="/addcomment")
-    public Object addComment(AddCommentDTO addCommentDTO){
+    public  Object addComment(
+                           @RequestParam (value = "openid")String openid,
+                           @RequestParam (value = "applyTo")String applyTo,
+                           @RequestParam (value = "avatar")String avatar,
+                           @RequestParam (value = "comment")String comment,
+                           @RequestParam (value = "userName")String userName,
+                           @RequestParam (value = "c_time")String c_time,
+                           @RequestParam (value = "pk")int pk,
+                           @RequestParam (value = "img")String img,
+                           @RequestParam (value = "level")String level,
+                           @RequestParam (value = "pid")int pid){ 
         Map<String,Object>map=new HashMap<>();
+        Comment commenta=new Comment();
+        commenta.setApplyTo(applyTo);
+        commenta.setAvatar(avatar);
+        commenta.setC_time(c_time);
+        commenta.setComment(comment);
+        commenta.setOpenid(openid);
+        commenta.setPk(pk);
+        commenta.setUserName(userName);
+        commenta.setImg(img.replace("[","").replace("]","").replace("\"",""));
+        commenta.setLevel(level);
+        commenta.setPid(pid);
+        List<BlackList> checkCode =beitaService.checkBlackList(openid);
+        if(checkCode.size()>0){
+        	String period = checkCode.get(0).getPeriod();
+        	int id = checkCode.get(0).getId();
+        	if (period.equals("1天")) {
+        		map.put("code",1);
+        		map.put("id",id);
+                map.put("msg","成功");
+        	} else if (period.equals("3天")) {
+        		map.put("code",3);
+        		map.put("id",id);
+                map.put("msg","成功");
+        	} else if (period.equals("7天")) {
+        		map.put("code",7);
+        		map.put("id",id);
+                map.put("msg","成功");
+        	} else {
+        		map.put("code",200);
+        		map.put("id",id);
+                map.put("msg","成功");
+        	} 
+        }else {
+            int addcode=beitaService.addComment(commenta);
+            int updateCode =beitaService.incComment(pk);
+        }
+        return map;
+    }
+	
+	@RequestMapping(value="/addcommentVerify")
+    public  Object addCommentVerify(
+    		AddCommentDTO addCommentDTO){ 
+		Map<String,Object>map=new HashMap<>();
         Comment comment=new Comment();
 
         org.springframework.beans.BeanUtils.copyProperties(addCommentDTO, comment);
-        
+
         // 特殊处理img字段，避免NPE
         String img = addCommentDTO.getImg();
         comment.setImg(img == null ? "" : img.replace("[","").replace("]","").replace("\"",""));
-        
+
         // 校园认证校验，未认证返回403
         if (!AuthUtil.isUserVerified(addCommentDTO.getOpenid(), quanziService)) {
             map.put("code", 403);
             map.put("msg", "未认证用户，无权执行该操作");
             return map;
         }
-        
+
         List<BlackList> checkCode = beitaService.checkBlackList(addCommentDTO.getOpenid());
         if(checkCode.size()>0){
         	String period = checkCode.get(0).getPeriod();
@@ -503,16 +671,9 @@ public class BeitaController {
                 map.put("msg","成功");
         	} 
         }else {
-            int addcode=beitaService.addComment(comment);
+        	int addcode=beitaService.addComment(comment);
             int updateCode =beitaService.incComment(comment.getPk());
         }
-//        if(addcode==1){
-//            map.put("code",200);
-//            map.put("msg","添加数据成功");
-//        }else {
-//            map.put("code",100);
-//            map.put("msg","添加数据失败");
-//        }
         return map;
     }
 	
@@ -574,8 +735,57 @@ public class BeitaController {
     public  Object getCommentByType(
     					   @RequestParam (value = "pk")int pk,
     					   @RequestParam (value = "length")int length,
-    					   @RequestParam (value = "type")String type){ 
+    					   @RequestParam (value = "type")String type,
+    					   @RequestParam (value = "c_time",required = false)String c_time,
+    					   @RequestParam (value = "encrypted",required = false)String encrypted){ 
         Map<String,Object>map=new HashMap<>();
+        
+        
+        String verify = "";
+		String c_time_en = "";
+		long time_diff_en = 0;
+		
+		try {
+			String password = "[PASSWORD]";
+			byte[] decryptFrom = AesUtil.parseHexStr2Byte(encrypted);
+			byte[] resultByte = AesUtil.decrypt(decryptFrom,password);
+			String result = new String(resultByte,"UTF-8");
+//        System.out.println(result);
+			JSONObject obj = JSON.parseObject(result);
+			verify = obj.getString("verify");
+			c_time_en = obj.getString("c_time");			
+			Date date_ori = null;
+			// test 时间戳转换
+			try {
+				SimpleDateFormat sdf = new SimpleDateFormat("EEE MMM dd yyyy HH:mm:ss 'GMT'Z", Locale.ENGLISH);
+				date_ori = sdf.parse(c_time);
+				Date date_en = sdf.parse(c_time_en);
+				time_diff_en = date_ori.getTime()-date_en.getTime();
+			} catch (Exception e1) {
+//							System.out.println("TIME FORMAT WONG");
+				// TODO Auto-generated catch block
+				try {
+					SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX", Locale.ENGLISH);
+					date_ori = sdf.parse(c_time);
+					Date date_en = sdf.parse(c_time_en);
+					time_diff_en = date_ori.getTime()-date_en.getTime();
+				} catch (Exception e2) {
+					System.out.println("TIME FORMAT WONG");
+				}
+			} //将字符串改为date的格式
+			
+		}catch (UnsupportedEncodingException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+			map.put("commentList",null);
+            return map;
+		}
+		
+		if (!verify.equals("[VERIFY]")) {
+        	map.put("commentList",null);
+            return map;
+        }
+        
         long startTime=System.currentTimeMillis();
         List<Comment> commentList =beitaService.getCommentByType(pk,length,type);
 //        System.out.println("现程序运行时间： "+(System.currentTimeMillis()-startTime)+"ms");
@@ -626,11 +836,29 @@ public class BeitaController {
     }
 	
 	
-    @RequestMapping(value="/deleteComment", method = {RequestMethod.POST})
+	@RequestMapping(value="/deleteComment")
     public  Object deleteComment(
     						HttpServletRequest request,
-                            @RequestBody DeleteCommentDTO deleteCommentDTO){ 
-        Map<String,Object> map = new HashMap<>();
+                           @RequestParam (value = "pk")int Id){ 
+		Map<String,Object>map=new HashMap<>();
+        String ip = IpUtil.getIpAddr(request);
+        System.out.println(ip);
+        int updateCode =beitaService.deleteComment(Id);
+        if(updateCode==1){
+            map.put("code",200);
+            map.put("msg","成功");
+        }else {
+            map.put("code",100);
+            map.put("msg","失败");
+        }     
+        return map;
+    }
+	
+	@RequestMapping(value="/deleteCommentVerify", method = {RequestMethod.POST})
+    public  Object deleteCommentVerify(
+    						HttpServletRequest request,
+    						@RequestBody DeleteCommentDTO deleteCommentDTO){ 
+		Map<String,Object> map = new HashMap<>();
 
         // 登录态校验：仅允许 status = 1 的用户删除
         if (!AuthUtil.isUserVerified(deleteCommentDTO.getOpenid(), quanziService)) {
@@ -817,6 +1045,26 @@ public class BeitaController {
     public  Object checkBlackList(
                            @RequestParam (value = "openid")String openid){
         Map<String,Object>map=new HashMap<>();
+//        List<BlackList> checkCode =beitaService.checkBlackList(openid);
+//        if(checkCode.size()>0){
+//        	String period = checkCode.get(0).getPeriod();
+//        	if (period.equals("1天")) {
+//        		map.put("code",1);
+//                map.put("msg","成功");
+//        	} else if (period.equals("3天")) {
+//        		map.put("code",3);
+//                map.put("msg","成功");
+//        	} else if (period.equals("7天")) {
+//        		map.put("code",7);
+//                map.put("msg","成功");
+//        	} else {
+//        		map.put("code",200);
+//                map.put("msg","成功");
+//        	} 
+//        }else {
+//            map.put("code",100);
+//            map.put("msg","失败");
+//        }
         map.put("code",100);
         return map;
     }

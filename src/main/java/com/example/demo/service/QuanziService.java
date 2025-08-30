@@ -136,7 +136,8 @@ public interface QuanziService {
     List<VerifyUser> getVerifyUserbyCampusLengthStatus(String campus, int length, int status);
     List<VerifyUser> getVerifyUserbyRegionCampusLengthStatus(String region, String campus, int length, int status);
     List<VerifyUser> getVerifyUserbyCampus(String campus);
-    List<VerifyUserIdentity> getVerifyUserByOpenid(String openid);
+    List<VerifyUser> getVerifyUserByOpenid(String openid);
+    List<VerifyUserIdentity> getVerifyUserIdentityByOpenid(String openid);
     int udpateUserInfoByOpenid(String openid, String nickname, String avatar);
     int addUserInfoByOpenid(String openid, String nickname, String avatar, int status);
     int addVerifyUser(VerifyUser verify_user);
@@ -145,7 +146,7 @@ public interface QuanziService {
     int deleteVerifyUserById(int id);
     List<VerifyUser> getVerifyUserbyEmail(String email);
     int udpateUserPhoneByOpenid(String openid, String phone);
-    int addUserPhoneByOpenid(String openid, String phone, int status);
+    int addUserPhoneByOpenid(String openid, String phone, int status, String region, String campus);
 //    int addbannerTask(int id);
 //    int downBannerTask(int id);
     int updateCampusRegionByOpenid(String openid, String campus, String region);

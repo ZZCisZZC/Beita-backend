@@ -46,7 +46,6 @@ import com.example.demo.model.Switch;
 import com.example.demo.model.Task;
 import com.example.demo.model.Test;
 import com.example.demo.model.VerifyUser;
-import com.example.demo.model.VerifyUserIdentity;
 import com.example.demo.service.QuanziService;
 import com.example.demo.service.impl.EmailUtils;
 import com.github.houbb.sensitive.word.core.SensitiveWordHelper;
@@ -372,6 +371,7 @@ public class QuanziController {
     public  Object incComment(
                            @RequestParam (value = "pk")int Id){ 
         Map<String,Object>map=new HashMap<>();
+//        int updateCode =quanziService.incComment(Id);
         int updateCode =1;
         if(updateCode==1){
             map.put("code",200);
@@ -531,6 +531,13 @@ public class QuanziController {
             int addcode=quanziService.addComment(commenta);
             int updateCode =quanziService.incComment(pk);
         }
+//        if(addcode==1){
+//            map.put("code",200);
+//            map.put("msg","添加数据成功");
+//        }else {
+//            map.put("code",100);
+//            map.put("msg","添加数据失败");
+//        }
         return map;
     }
 	
@@ -596,6 +603,7 @@ public class QuanziController {
         Map<String,Object>map=new HashMap<>();
         long startTime=System.currentTimeMillis();
         List<Comment> commentList =quanziService.getCommentByType(pk,length,type);
+//        System.out.println("现程序运行时间： "+(System.currentTimeMillis()-startTime)+"ms");
         List<String> strL = new ArrayList<>();
         for (Comment com:commentList) {
         	strL.add(String.valueOf(com.getId()));
@@ -604,6 +612,7 @@ public class QuanziController {
         if (commentList.size() > 0) {
         	commentSecondList =quanziService.getCommentByIdList(strL);
         }
+//        System.out.println("现程序运行时间： "+(System.currentTimeMillis()-startTime)+"ms");
         List<CommentLevel> commentLevelList = new ArrayList<>();
         for (Comment com:commentList){
         	CommentLevel commentLevel=new CommentLevel();   	
@@ -622,6 +631,7 @@ public class QuanziController {
         	commentLevel.setCommentList(new ArrayList<>());
         	commentLevelList.add(commentLevel);
     	}
+//        System.out.println("现程序运行时间： "+(System.currentTimeMillis()-startTime)+"ms");
         for (Comment com2:commentSecondList) {
         	for (int x = 0; x < commentList.size(); x = x+1){
         		if(com2.getPid() == commentList.get(x).getId()) {
@@ -632,8 +642,11 @@ public class QuanziController {
         		}
         	} 	
         }
+//        System.out.println("现程序运行时间： "+(System.currentTimeMillis()-startTime)+"ms");
 
         map.put("commentList",commentLevelList);     
+//        long endTime=System.currentTimeMillis();
+//        System.out.println("现程序运行时间： "+(System.currentTimeMillis()-startTime)+"ms");
         return map;
     }
 	
@@ -829,7 +842,7 @@ public class QuanziController {
 	public Object getVerifyUserByOpenid(
 		@RequestParam (value = "openid")String openid) {
 		 Map<String,Object>map=new HashMap<>();
-		 List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
+		 List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
 		 if (existence.size()>0) {
 			 map.put("code", "200");
 			 map.put("msg", existence.get(0).getStatus());
@@ -849,7 +862,7 @@ public class QuanziController {
 			@RequestParam (value = "campus", required=false)String campus) {
         Map<String,Object>map=new HashMap<>();
         
-        List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
+        List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
         if (existence.size()>0) {
         	map.put("code",-1);
             map.put("msg","该微信号已认证");
@@ -882,10 +895,10 @@ public class QuanziController {
 	public Object checkVerifyUserQuanzi(
 			@RequestParam (value = "openid")String openid) {
 		Map<String,Object>map=new HashMap<>();
-        List<VerifyUserIdentity> existence = quanziService.getVerifyUserByOpenid(openid);
-        if (existence.size() > 0) {
-            VerifyUserIdentity user = existence.get(0);
-            if (user.getStatus() == 1) {
+		List<VerifyUser> existence = quanziService.getVerifyUserByOpenid(openid);
+		if (existence.size()>0) {
+			VerifyUser user = existence.get(0);
+			if (user.getStatus()==1) {
 				map.put("code",200);
 	            map.put("msg","该微信号已认证");
 			} else {
